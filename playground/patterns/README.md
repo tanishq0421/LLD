@@ -43,9 +43,10 @@ Study a pattern **together with the problem it naturally solves** — that's how
 | **Proxy** | Stand-in that controls access to another object | Caching proxy, access control, lazy loading | *(LRU as a cache layer; discuss)* |
 | **Abstract Factory** | Create families of related objects | Cross-platform UI kit, themed component families | *(rare — sketch only)* |
 
-> **Memento** (Tier 3) also gets real practice in `text_editor` (undo via snapshots) and
-> `inmemory_kv_store` (transaction rollback). **Iterator/Flyweight/Mediator/Visitor/Prototype/Bridge/
-> Interpreter** stay skim-only — recognize and name them, don't over-invest.
+> **Memento** (Tier 3) gets real practice in `text_editor` (undo via snapshots) and
+> `inmemory_kv_store` (transaction rollback); **Mediator** in `chat_system` (room relays messages).
+> **Iterator/Flyweight/Visitor/Prototype/Bridge/Interpreter** stay skim-only — recognize and name
+> them, don't over-invest.
 
 ---
 
@@ -61,6 +62,47 @@ Study a pattern **together with the problem it naturally solves** — that's how
 | **Prototype** | Clone expensive-to-build objects | Post-DB-fetch caching + clone |
 | **Bridge** | Decouple abstraction from implementation | Device/remote, shape/renderer |
 | **Interpreter** | Evaluate a simple grammar/DSL | Tiny expression languages (<20 rules) |
+
+---
+
+## How to DECIDE which pattern (the actual skill)
+
+**Don't start from patterns — start from requirements.** Memorizing 23 and pattern-matching is the
+trap that causes over-engineering (a named red flag). The GoF one-liner *is* the whole skill:
+**"identify the thing that varies and encapsulate it."** A pattern is just the *named remedy* for a
+specific recurring pain (a "force"). **No force → no pattern.**
+
+The process every time:
+1. Model the nouns/verbs plainly first — **no patterns**.
+2. Ask *"what is likely to change or grow?"* and *"what's getting ugly?"*
+3. That symptom points to the pattern. Match the **force**, not the vocabulary.
+
+**Symptom → pattern (decision table):**
+
+| The symptom you feel | The force | Pattern |
+|---|---|---|
+| `if/elif` on a *type* to pick an algorithm (payment, pricing, split) | the algorithm varies | **Strategy** |
+| Behavior depends on a *status that transitions* (idle→moving, INITIATED→PAID) | behavior varies by lifecycle | **State** |
+| One change must update many dependents (price → displays) | 1-to-many notification | **Observer** |
+| `new ConcreteX()` chosen by a type param | object creation varies | **Factory** |
+| Constructor with many optional args (telescoping) | complex assembly | **Builder** |
+| Add features by stacking, not subclassing (`EspressoWithMilkAndSugar`) | responsibilities vary | **Decorator** |
+| A request should try handlers in sequence (ATM notes, log levels, approvals) | handler varies | **Chain of Responsibility** |
+| Two incompatible interfaces must interoperate (3rd-party gateway) | interface mismatch | **Adapter** |
+| Need to queue/undo/log an action | action as data | **Command** |
+| Part–whole tree, leaf & group treated the same (files/dirs) | recursive structure | **Composite** |
+| Many objects talking many-to-many gets tangled (chat) | coupling explosion | **Mediator** |
+
+**The three confusions worth nailing:**
+- **Strategy vs State** — *who decides the switch?* Caller picks the algorithm, strategies don't know
+  each other → **Strategy**. The object transitions itself and a state knows the next state → **State**.
+- **Factory vs Builder** — Factory decides *which* object to create; Builder assembles *one complex*
+  object step by step.
+- **Decorator vs inheritance** — when combinations explode (milk × sugar × size), wrap (Decorator)
+  instead of subclassing.
+
+**Restraint rule (an SDE-2 signal):** if nothing varies and nothing hurts, use a plain class. Saying
+*"a Strategy here would be over-engineering — one class is fine"* scores higher than forcing a pattern.
 
 ---
 

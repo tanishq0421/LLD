@@ -25,12 +25,14 @@ included; you write those.**
 
 ## Problem catalog
 
-**25 problems** (7 easy · 11 medium · 7 hard). Difficulty reflects the interview bar, not just code
+**33 problems** (9 easy · 16 medium · 8 hard). Difficulty reflects the interview bar, not just code
 size. Every problem lists the patterns it naturally invites and the concurrency escalation to expect.
 Between them they cover **every Tier-1 and Tier-2 design pattern** (Strategy, Observer, Factory,
 Singleton, State, Builder, Decorator, Facade, Chain of Responsibility, Adapter, Command, Template
-Method, Composite, Proxy, Abstract Factory) plus concurrency, transactions, graphs, and interval
-modeling — see [`patterns/README.md`](patterns/README.md) for the pattern→problem map.
+Method, Composite, Proxy, Abstract Factory) plus **Mediator** and **Memento**, and span concurrency,
+transactions, idempotency, graphs, order books, and interval modeling — see
+[`patterns/README.md`](patterns/README.md) for the pattern→problem map. Problem selection is driven by
+the frequency data in [`RESEARCH.md`](RESEARCH.md) and mapped to the SDE-1/SDE-2/SDE-3 question banks.
 
 ### 🟢 Easy — first-round filters / warm-ups
 | Problem | Core skill | Patterns | Concurrency follow-up |
@@ -42,6 +44,8 @@ modeling — see [`patterns/README.md`](patterns/README.md) for the pattern→pr
 | [Coffee Machine](problems/easy/coffee_machine/README.md) | Compose add-ons without class explosion | **Decorator** | — |
 | [Stock Ticker](problems/easy/stock_ticker/README.md) | Subject/subscriber notification | **Observer** | Notify off-thread |
 | [Meal Builder](problems/easy/meal_builder/README.md) | Build complex objects w/ invariants | **Builder** | — |
+| [URL Shortener](problems/easy/url_shortener/README.md) | Unique code gen + expand (≈ pastebin) | base62/Strategy, Singleton | — |
+| [Voting System](problems/easy/voting_system/README.md) | One-vote invariants, live tallies | (clean modeling) | Concurrent tally |
 
 ### 🟡 Medium — the bread-and-butter machine-coding problems
 | Problem | Core skill | Patterns | Concurrency follow-up |
@@ -57,6 +61,11 @@ modeling — see [`patterns/README.md`](patterns/README.md) for the pattern→pr
 | [Meeting Scheduler](problems/medium/meeting_scheduler/README.md) | Interval conflict detection | (interval modeling) | Booking race for last room |
 | [Discount Engine](problems/medium/discount_engine/README.md) | Stacking promo rules | **Strategy**, **Chain of Responsibility** | — |
 | [Pub/Sub Broker](problems/medium/pub_sub/README.md) | Topics + per-subscriber offsets (mini-Kafka) | **Observer** | Concurrent publish/poll (core) |
+| [Online Quiz](problems/medium/online_quiz/README.md) | Attempt lifecycle + scoring | Strategy (scoring) | — |
+| [Library Management](problems/medium/library_management/README.md) | Inventory + borrow invariants | (clean modeling) | Last-copy race |
+| [Hotel Booking](problems/medium/hotel_booking/README.md) | Date-range reservations by room type | interval modeling | Last-room race |
+| [Inventory Management](problems/medium/inventory_management/README.md) | reserve→confirm/release, no oversell | reserve/commit | Oversell race (core) |
+| [Chat System](problems/medium/chat_system/README.md) | Group message fan-out | **Mediator** | Concurrent send/join |
 
 ### 🔴 Hard — SDE-2 escalations (concurrency & stateful correctness)
 | Problem | Core skill | Patterns | Concurrency follow-up |
@@ -68,6 +77,7 @@ modeling — see [`patterns/README.md`](patterns/README.md) for the pattern→pr
 | [File System](problems/hard/file_system/README.md) | Files/dirs as a uniform tree | **Composite** | Per-node vs subtree locking |
 | [Order Matching Engine](problems/hard/order_matching_engine/README.md) | Order book, **price-time priority** | Strategy, priority structures | Serialized matching |
 | [Job Scheduler](problems/hard/job_scheduler/README.md) | DAG deps, **topological sort**, cycle detection | graph modeling, Command | Parallel ready-set execution |
+| [Payment Gateway](problems/hard/payment_gateway/README.md) | Payment lifecycle + **idempotency** | **State**, Strategy (providers) | Concurrent retry, exactly-once |
 
 ---
 
