@@ -58,34 +58,45 @@ STEP 4 — SOLID + FOLLOW-UPS
 #         self.items.append((name, price, qty))
 
 #     def subtotal(self):
+#         # LOGIC: sum price*qty over every item. The `_` throws away the name we don't need here.
 #         return sum(price * qty for _, price, qty in self.items)
 
 
 # class DiscountEngine:
 #     def __init__(self):
-#         self.rules = []                    # ORDERED list of rule callables (the chain)
+#         self.rules = []                    # ORDERED list of rule callables (this list IS the chain)
 
 #     def add_rule(self, rule):
-#         # a rule is any callable rule(cart, running_total) -> new_total. Keeping it a callable
-#         # means built-ins AND user lambdas AND rule-classes all just work (Strategy).
+#         # a rule is ANY callable rule(cart, running_total) -> new_total. Because it's just a
+#         # callable, built-ins, user lambdas, and rule-classes-with-__call__ all plug in the same
+#         # way (Strategy). Order of add_rule calls = order of application.
 #         self.rules.append(rule)
 
 #     def total(self, cart):
+#         # THE CHAIN as a fold: start at the subtotal, then thread that number through each rule in
+#         # turn — each rule's OUTPUT becomes the next rule's INPUT. E.g. 200 → 180 → 162.
 #         t = cart.subtotal()
-#         for rule in self.rules:            # CHAIN: thread the running total through each rule
+#         for rule in self.rules:
 #             t = rule(cart, t)
-#         return round(max(0, t), 2)         # floor at 0, round money to 2dp
+#         # floor at 0 (a big flat discount can't make you owe money), then round money to 2 places.
+#         return round(max(0, t), 2)
 
-#     # --- built-in rule BUILDERS: each RETURNS a strategy callable (a closure over its config) ---
+#     # --- built-in rule BUILDERS. Each RETURNS a rule callable (a closure). ---
+#     # KEY IDEA (closure): the returned lambda "remembers" the pct/amount it was built with, so
+#     # percentage(10) and percentage(20) are two different rules from the same builder.
 #     @staticmethod
 #     def percentage(pct):
+#         # take pct% off the RUNNING total t:  t * (1 - pct/100).  10% off 180 → 180*0.9 = 162.
 #         return lambda cart, t: t * (1 - pct / 100)
 
 #     @staticmethod
 #     def flat(amount):
+#         # subtract a fixed amount, but not below 0 (max(0, ...) guards against over-discounting).
 #         return lambda cart, t: max(0, t - amount)
 
 #     @staticmethod
 #     def threshold(min_subtotal, amount):
-#         # NOTE: gate on the ORIGINAL subtotal (cart.subtotal()), not the discounted running total.
+#         # conditional discount. NOTE: it gates on cart.subtotal() (the ORIGINAL bill), not on the
+#         # already-discounted running total t — otherwise stacking discounts could sneak you under
+#         # the threshold. If it qualifies → knock off `amount`; else pass t through unchanged.
 #         return lambda cart, t: max(0, t - amount) if cart.subtotal() >= min_subtotal else t

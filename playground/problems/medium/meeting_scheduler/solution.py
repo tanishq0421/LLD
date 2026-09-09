@@ -61,49 +61,58 @@ STEP 4 — SOLID + SCALE + CONCURRENCY
 #     pass
 
 
-# # The heart of the whole problem — half-open overlap. Keep it a named helper so it reads like
-# # the rule you'd say out loud, and so it's testable in isolation (SRP).
+# # THE HEART OF THE PROBLEM. Picture two bars on a number line:  A = [s1, e1),  B = [s2, e2).
+# #   They MISS each other in only two ways:  A entirely before B  (e1 <= s2)
+# #                                     or:    A entirely after  B  (e2 <= s1)
+# #   They OVERLAP in every other case. Negate "miss": overlap == NOT(e1<=s2 or e2<=s1)
+# #                                                            == (e1 > s2) and (e2 > s1)
+# #                                                            == (s1 < e2) and (s2 < e1)   ← this line.
+# #   Example: [10,11) vs [11,12) → s1<e2 (10<12 ✓) and s2<e1 (11<11 ✗) → False → NO clash (good,
+# #   half-open lets back-to-back meetings share the boundary 11).
 # def overlaps(s1, e1, s2, e2):
 #     return s1 < e2 and s2 < e1
 
 
 # class MeetingScheduler:
 #     def __init__(self):
-#         self.rooms = {}       # room_id -> list of (start, end, booking_id)   (a room's timeline)
-#         self.bookings = {}    # booking_id -> (room_id, start, end)           (for cancel)
+#         self.rooms = {}       # room_id -> list of (start, end, booking_id)   (that room's timeline)
+#         self.bookings = {}    # booking_id -> (room_id, start, end)           (reverse index for cancel)
 #         self._seq = itertools.count(1)
 
 #     def add_room(self, room_id):
-#         self.rooms[room_id] = []
+#         self.rooms[room_id] = []                          # a new room starts with an empty timeline
 
 #     def is_available(self, room_id, start, end):
-#         # available == NO existing booking in this room overlaps the requested window.
+#         # LOGIC: available == the requested window overlaps NONE of this room's existing bookings.
+#         # `any(...)` is True if even one overlaps; we want the opposite, hence `not any(...)`.
 #         return not any(overlaps(start, end, s, e) for (s, e, _) in self.rooms[room_id])
 
 #     def book(self, room_id, start, end):
 #         if room_id not in self.rooms:
-#             raise KeyError(room_id)                       # unknown room
+#             raise KeyError(room_id)                        # unknown room
 #         if start >= end:
-#             raise ValueError("start must be before end")  # reject zero/negative windows
+#             raise ValueError("start must be before end")   # a zero/negative window is meaningless
 #         if not self.is_available(room_id, start, end):
 #             raise Conflict("overlaps an existing booking")
-#         booking_id = f"B{next(self._seq)}"
-#         self.rooms[room_id].append((start, end, booking_id))
-#         self.bookings[booking_id] = (room_id, start, end)
+#         booking_id = f"B{next(self._seq)}"                 # itertools.count → 1,2,3... unique ids
+#         self.rooms[room_id].append((start, end, booking_id))   # record it on the room's timeline
+#         self.bookings[booking_id] = (room_id, start, end)      # and in the reverse index
 #         return booking_id
 
 #     def available_rooms(self, start, end):
-#         # insertion order (dict preserves it) → deterministic, matches how rooms were added.
+#         # LOGIC: filter every room down to the ones free for this window. Iterating a dict yields its
+#         # keys IN INSERTION ORDER (Python 3.7+), so results are deterministic (matches add order).
 #         return [r for r in self.rooms if self.is_available(r, start, end)]
 
 #     def book_any(self, start, end):
-#         # ALLOCATION STRATEGY = first-fit: first room free for the window.
+#         # ALLOCATION STRATEGY = first-fit: take the FIRST room that's free, then book it.
 #         for r in self.rooms:
 #             if start < end and self.is_available(r, start, end):
-#                 return (r, self.book(r, start, end))
+#                 return (r, self.book(r, start, end))       # reuse book() so all the checks still run
 #         raise NoRoomAvailable("no room free for that window")
 
 #     def cancel(self, booking_id):
-#         room_id, s, e = self.bookings.pop(booking_id)     # KeyError if unknown → correct
-#         # drop this booking from the room's timeline (match by id, not by times)
+#         room_id, s, e = self.bookings.pop(booking_id)      # pop → KeyError if unknown (correct)
+#         # LOGIC: rebuild the room's timeline WITHOUT this booking. Match by the unique id (b[2]),
+#         # not by (start,end) — two bookings could share times across rooms, ids never collide.
 #         self.rooms[room_id] = [b for b in self.rooms[room_id] if b[2] != booking_id]

@@ -62,17 +62,20 @@ STEP 4 — SOLID + FOLLOW-UPS + CONCURRENCY
 # class PaymentGateway:
 #     def __init__(self):
 #         self.payments = {}   # payment_id -> {"amount","status","captured","refunded"}
-#         self.keys = {}       # idempotency_key -> payment_id   (the exactly-once memory)
+#         self.keys = {}       # idempotency_key -> payment_id   (the "have I seen this request?" memory)
 #         self._seq = itertools.count(1)
 
 #     def charge(self, idempotency_key, amount):
-#         # IDEMPOTENCY: seen this key before? return the original payment, don't charge again.
+#         # IDEMPOTENCY — the whole trick, in 2 lines: if we've seen this key, return the ORIGINAL
+#         # payment id and stop. So a client that retries a timed-out charge gets the same payment,
+#         # never a second one. (This is why the key must come from the CLIENT and be stable per attempt.)
 #         if idempotency_key in self.keys:
 #             return self.keys[idempotency_key]
 #         pid = f"PAY{next(self._seq)}"
+#         # a fresh payment starts AUTHORIZED (money reserved, not yet taken); nothing captured/refunded.
 #         self.payments[pid] = {"amount": amount, "status": "AUTHORIZED",
 #                               "captured": 0, "refunded": 0}
-#         self.keys[idempotency_key] = pid
+#         self.keys[idempotency_key] = pid          # remember key → payment for future retries
 #         return pid
 
 #     def _get(self, pid):
@@ -83,24 +86,28 @@ STEP 4 — SOLID + FOLLOW-UPS + CONCURRENCY
 
 #     def capture(self, pid):
 #         p = self._get(pid)
-#         # STATE GUARD: capture is only legal from AUTHORIZED.
+#         # STATE GUARD: capture is only legal from AUTHORIZED. This one check makes "capture twice"
+#         # and "capture something already refunded" impossible.
 #         if p["status"] != "AUTHORIZED":
 #             raise PaymentError("can only capture an AUTHORIZED payment")
 #         p["status"] = "CAPTURED"
-#         p["captured"] = p["amount"]
+#         p["captured"] = p["amount"]               # the full authorized amount is now actually taken
 #         return p["status"]
 
 #     def refund(self, pid, amount=None):
 #         p = self._get(pid)
-#         # STATE GUARD: refund only after capture (CAPTURED or already PARTIALLY_REFUNDED).
+#         # STATE GUARD: you can only refund money that was actually captured. PARTIALLY_REFUNDED is
+#         # included so you can refund the rest in more than one step.
 #         if p["status"] not in ("CAPTURED", "PARTIALLY_REFUNDED"):
 #             raise PaymentError("can only refund a captured payment")
-#         remaining = p["captured"] - p["refunded"]
-#         amt = remaining if amount is None else amount   # None = refund the remaining balance
-#         if amt <= 0 or amt > remaining:                 # never over-refund
+#         remaining = p["captured"] - p["refunded"]  # how much is still refundable right now
+#         amount = remaining if amount is None else amount   # None = "refund whatever's left"
+#         # never refund ≤ 0, and never MORE than remains (that would refund money you never took).
+#         if amount <= 0 or amount > remaining:
 #             raise PaymentError("invalid refund amount")
-#         p["refunded"] += amt
-#         # transition depends on whether everything captured is now refunded
+#         p["refunded"] += amount
+#         # LOGIC: if we've now refunded everything captured → fully REFUNDED; else PARTIALLY_REFUNDED
+#         # (which loops back into this method for the next chunk).
 #         p["status"] = "REFUNDED" if p["refunded"] == p["captured"] else "PARTIALLY_REFUNDED"
 #         return p["status"]
 

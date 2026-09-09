@@ -65,29 +65,35 @@ STEP 4 — CONCURRENCY (THE interview point — rehearse this out loud)
 
 # class BookingService:
 #     def __init__(self):
-#         self.shows = {}      # show_id -> {seat_id: booked?}
-#         self.locks = {}      # show_id -> Lock  (per-show lock = fine-grained, not one global lock)
+#         self.shows = {}      # show_id -> {seat_id: booked?}   (False = AVAILABLE, True = BOOKED)
+#         self.locks = {}      # show_id -> Lock   (one lock PER show = fine-grained, not one global lock)
 #         self.bookings = {}   # booking_id -> {"show_id", "user_id", "seats"}
 #         self._seq = itertools.count(1)
 
 #     def add_show(self, show_id, seat_ids):
-#         self.shows[show_id] = {s: False for s in seat_ids}   # all seats start AVAILABLE
-#         self.locks[show_id] = threading.Lock()
+#         # every seat starts False (available); dict-comprehension builds {A1:False, A2:False, ...}.
+#         self.shows[show_id] = {s: False for s in seat_ids}
+#         self.locks[show_id] = threading.Lock()          # this show's own lock
 
 #     def available_seats(self, show_id):
-#         seats = self.shows[show_id]                          # KeyError if unknown show → correct
+#         seats = self.shows[show_id]                     # KeyError if unknown show → correct
+#         # keep only the seats whose value is False (not booked); sorted() for a stable, readable list.
 #         return sorted(s for s, booked in seats.items() if not booked)
 
 #     def book(self, show_id, seat_ids, user_id):
-#         seats = self.shows[show_id]                          # KeyError if unknown show
+#         seats = self.shows[show_id]                     # KeyError if unknown show
+#         # validate seat ids BEFORE taking the lock — cheap checks shouldn't hold the lock.
 #         for s in seat_ids:
 #             if s not in seats:
-#                 raise KeyError(s)                            # unknown seat → fail before locking
-#         # CRITICAL SECTION: check-all-then-mark-all under the show's lock, so two racing bookings
-#         # can't both pass the "are they free?" check for the same seat.
+#                 raise KeyError(s)                        # unknown seat id
+#         # CRITICAL SECTION. Only one thread per show is inside here at a time, so the "are they all
+#         # free?" check and the "mark them all" write happen as ONE indivisible step — no other
+#         # booking can slip between them and grab the same seat.
 #         with self.locks[show_id]:
-#             if any(seats[s] for s in seat_ids):              # ALL-OR-NOTHING: any taken → abort
+#             # ALL-OR-NOTHING check: any(...) is True if EVEN ONE requested seat is already booked.
+#             if any(seats[s] for s in seat_ids):
 #                 raise SeatUnavailable("one or more seats already booked")
+#             # only now, when we KNOW all are free, do we mark them — so we never half-book.
 #             for s in seat_ids:
 #                 seats[s] = True
 #             booking_id = f"BK{next(self._seq)}"
@@ -96,11 +102,13 @@ STEP 4 — CONCURRENCY (THE interview point — rehearse this out loud)
 #             return booking_id
 
 #     def cancel(self, booking_id):
-#         bk = self.bookings.pop(booking_id)                   # KeyError if unknown booking
+#         bk = self.bookings.pop(booking_id)              # pop → KeyError if unknown booking
 #         seats = self.shows[bk["show_id"]]
+#         # flip the seats back to available, under the same per-show lock (a concurrent booking must
+#         # not read a half-updated seat map).
 #         with self.locks[bk["show_id"]]:
 #             for s in bk["seats"]:
-#                 seats[s] = False                             # free the seats again
+#                 seats[s] = False
 
 #     def get_booking(self, booking_id):
-#         return self.bookings[booking_id]                     # KeyError if unknown
+#         return self.bookings[booking_id]                # KeyError if unknown

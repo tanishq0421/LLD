@@ -58,32 +58,36 @@ STEP 4 — SOLID + FOLLOW-UPS
 
 # class NotificationService:
 #     def __init__(self):
-#         # channels: name -> sender callable. `sender(recipient, message)` is the UNIFORM
-#         # interface every provider-adapter conforms to. Dict preserves registration order,
-#         # which we use for deterministic delivery order.
+#         # channels: name -> sender callable. A dict, so lookups are O(1) AND it remembers INSERTION
+#         # ORDER (Python 3.7+) — we rely on that order for deterministic delivery below.
 #         self.channels = {}
-#         self.prefs = {}      # user_id -> set of channel names they've subscribed to
+#         self.prefs = {}      # user_id -> set() of channel names they've subscribed to
 
 #     def register_channel(self, name, sender):
-#         # `sender` is the adapter: it hides whether it's really Twilio, SES, FCM, etc.
+#         # `sender` is the adapter callable send(recipient, message). We store the FUNCTION, not a
+#         # provider object — so the service never knows or depends on Twilio/SES specifics (DIP).
 #         self.channels[name] = sender
 
 #     def subscribe(self, user, channel):
 #         if channel not in self.channels:
 #             raise NotificationError("channel not registered")
-#         # setdefault + set = idempotent (subscribing twice doesn't double-deliver).
+#         # LOGIC: setdefault(user, set()) returns the user's existing set, or creates an empty one on
+#         # first use. Adding to a SET makes subscribe IDEMPOTENT — subscribing twice = one membership,
+#         # so the user can't get the same message twice.
 #         self.prefs.setdefault(user, set()).add(channel)
 
 #     def unsubscribe(self, user, channel):
-#         self.prefs.get(user, set()).discard(channel)   # no-op if not subscribed
+#         # .get(user, set()) avoids a KeyError for an unknown user; .discard() removes if present and
+#         # is a no-op otherwise (unlike .remove(), which would raise). So this never errors.
+#         self.prefs.get(user, set()).discard(channel)
 
 #     def notify(self, user, message):
-#         subs = self.prefs.get(user, set())              # a user with no prefs → nothing, no error
+#         subs = self.prefs.get(user, set())        # a user with no prefs → empty set → delivers nothing
 #         delivered = []
-#         # iterate CHANNELS (registration order) and deliver to the ones this user wants →
-#         # deterministic order, and the service never hard-codes provider specifics.
+#         # LOGIC: iterate CHANNELS (registration order, not the user's set) so delivery order is
+#         # stable and predictable. For each channel the user is subscribed to, call its sender.
 #         for name, sender in self.channels.items():
-#             if name in subs:
-#                 sender(user, message)
+#             if name in subs:                      # set membership check = O(1)
+#                 sender(user, message)             # hand off to the adapter → real provider
 #                 delivered.append(name)
-#         return delivered
+#         return delivered                          # who actually got it (useful for tests/audit)

@@ -70,47 +70,55 @@ STEP 4 — SOLID
 #         if size < 3:
 #             raise ValueError("size must be >= 3")
 #         self.size = size
-#         # private grid so storage can change without breaking callers; None = empty cell.
+#         # LOGIC: a size×size grid of cells, all empty (None). `[[None]*size for _ in range(size)]`
+#         # builds a FRESH inner list per row — do NOT write [[None]*size]*size, that repeats the
+#         # SAME row object size times, so editing one cell would change the whole column.
 #         self._grid = [[None] * size for _ in range(size)]
-#         self._filled = 0                     # count so is_full is O(1), not an O(N^2) rescan
+#         # LOGIC: track how many cells are filled so is_full is O(1). We increment on each place()
+#         # instead of scanning all N² cells every time we want to know "is the board full?".
+#         self._filled = 0
 
 #     def in_bounds(self, r, c):
+#         # LOGIC: valid indices are 0..size-1 on both axes. `0 <= r < size` is the Pythonic range check.
 #         return 0 <= r < self.size and 0 <= c < self.size
 
 #     def is_empty(self, r, c):
-#         return self._grid[r][c] is None
+#         return self._grid[r][c] is None          # None means "no mark here yet"
 
 #     def place(self, r, c, symbol):
 #         self._grid[r][c] = symbol
-#         self._filled += 1
+#         self._filled += 1                         # keep the O(1) fullness counter in sync
 
 #     def get(self, r, c):
 #         return self._grid[r][c]
 
 #     @property
 #     def is_full(self):
+#         # LOGIC: a size×size board has size*size cells; if we've filled them all, it's full.
 #         return self._filled == self.size * self.size
 
 
 # # The CONTROLLER: owns the rules (whose turn, is a move legal, did it win/draw).
 # class Game:
 #     def __init__(self, size=3):
-#         self.board = Board(size)             # COMPOSITION: Game creates & owns its Board
-#         self._symbols = [Symbol.X, Symbol.O]  # X moves first
-#         self._turn = 0                       # index 0/1 into _symbols
-#         self._status = GameStatus.IN_PROGRESS  # rich enum kept internally...
+#         self.board = Board(size)                  # COMPOSITION: Game creates & owns its Board
+#         self._symbols = [Symbol.X, Symbol.O]      # index 0 = X (moves first), index 1 = O
+#         self._turn = 0                            # whose turn: an index into _symbols
+#         self._status = GameStatus.IN_PROGRESS     # rich enum kept internally...
 #         self.winner: Optional[str] = None
 
 #     @property
 #     def status(self):
-#         return self._status.value            # ...exposed as the plain string the caller expects
+#         return self._status.value                 # ...exposed as the plain string the caller expects
 
 #     @property
 #     def current_symbol(self):
+#         # LOGIC: _turn is 0 or 1, so this reads the current player's Symbol and returns "X"/"O".
 #         return self._symbols[self._turn].value
 
 #     def move(self, row, col):
-#         # GUARD CLAUSES first: game-over, then bounds, then occupancy (precise failure reason).
+#         # GUARD CLAUSES first: reject in order game-over → out-of-bounds → occupied, so the raised
+#         # message names the FIRST real reason. Guards up top keep the happy path flat/unindented.
 #         if self._status != GameStatus.IN_PROGRESS:
 #             raise InvalidMove("game is already over")
 #         if not self.board.in_bounds(row, col):
@@ -118,29 +126,39 @@ STEP 4 — SOLID
 #         if not self.board.is_empty(row, col):
 #             raise InvalidMove("cell taken")
 
-#         sym = self._symbols[self._turn]
+#         sym = self._symbols[self._turn]           # the mark we're about to place
 #         self.board.place(row, col, sym)
 
+#         # DECIDE the resulting status from THIS move:
 #         if self._wins(row, col, sym):
 #             self._status = GameStatus.WIN
 #             self.winner = sym.value
-#         elif self.board.is_full:
+#         elif self.board.is_full:                  # board full AND nobody won → draw
 #             self._status = GameStatus.DRAW
 #         else:
-#             self._turn = 1 - self._turn      # flip 0<->1: pass the turn
+#             # LOGIC: toggle turn between 0 and 1. 1-0 = 1, 1-1 = 0, so it flips each call. (Cleaner
+#             # than an if/else; for >2 players you'd use (self._turn + 1) % num_players instead.)
+#             self._turn = 1 - self._turn
 
 #         return self._status.value
 
 #     def _wins(self, r, c, sym):
-#         # EFFICIENCY (SDE-2 signal): only the row/col/diagonals THROUGH (r,c) can complete from
-#         # this move → check O(N) cells, not the whole O(N^2) board.
+#         # KEY INSIGHT: the move at (r,c) can only COMPLETE a line that PASSES THROUGH (r,c). There
+#         # are at most 4 such lines — this cell's row, its column, and (only if it sits on them) the
+#         # two diagonals. So we check 4 lines of N cells = O(N), never the whole O(N²) board.
 #         n = self.board.size
+#         # row r: are all N cells in this row == sym?  `all(...)` is True only if every check passes.
 #         if all(self.board.get(r, j) == sym for j in range(n)):
 #             return True
+#         # column c: same, walking down the rows at fixed column c.
 #         if all(self.board.get(i, c) == sym for i in range(n)):
 #             return True
+#         # main diagonal (top-left → bottom-right) = cells where row == col: (0,0),(1,1),(2,2)...
+#         # Only relevant if OUR cell is on it, i.e. r == c.
 #         if r == c and all(self.board.get(i, i) == sym for i in range(n)):
 #             return True
+#         # anti-diagonal (top-right → bottom-left) = cells where row+col == n-1: (0,2),(1,1),(2,0)
+#         # for n=3. Only relevant if r + c == n-1. The cell (i, n-1-i) walks that diagonal.
 #         if r + c == n - 1 and all(self.board.get(i, n - 1 - i) == sym for i in range(n)):
 #             return True
 #         return False

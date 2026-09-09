@@ -69,47 +69,53 @@ STEP 4 — CONCURRENCY (THE follow-up — rehearse this)
 #         self._seq = itertools.count(1)
 
 #     def add_product(self, sku, quantity):
-#         self.products[sku] = {"on_hand": quantity, "reserved": 0}
+#         self.products[sku] = {"on_hand": quantity, "reserved": 0}   # nothing reserved yet
 
 #     def restock(self, sku, qty):
 #         if sku not in self.products:
 #             raise InventoryError("unknown sku")
-#         self.products[sku]["on_hand"] += qty
+#         self.products[sku]["on_hand"] += qty        # more physical units arrived
 
 #     def available(self, sku):
 #         if sku not in self.products:
 #             raise InventoryError("unknown sku")
 #         p = self.products[sku]
-#         return p["on_hand"] - p["reserved"]     # the core formula
+#         # THE CORE FORMULA: sellable-right-now = what's physically here minus what's already held.
+#         return p["on_hand"] - p["reserved"]
 
 #     def reserve(self, sku, qty):
-#         # CRITICAL SECTION: the check (available >= qty) and the update (reserved += qty) must be
-#         # ONE atomic step, or two threads oversell the last unit.
+#         # CRITICAL SECTION: `with self._lock:` means only ONE thread runs this block at a time.
+#         # The check (available >= qty) and the update (reserved += qty) must be inseparable, or
+#         # two threads both pass the check for the last unit and both reserve it → oversell.
 #         with self._lock:
 #             if sku not in self.products:
 #                 raise InventoryError("unknown sku")
 #             p = self.products[sku]
-#             if p["on_hand"] - p["reserved"] < qty:
+#             if p["on_hand"] - p["reserved"] < qty:  # not enough sellable units
 #                 raise InventoryError("insufficient stock")
-#             p["reserved"] += qty
+#             p["reserved"] += qty                    # HOLD it (on_hand untouched — unit still here)
 #             rid = f"R{next(self._seq)}"
+#             # remember what this reservation holds, and that it's live ("active") so it can't be
+#             # confirmed/released twice.
 #             self.reservations[rid] = {"sku": sku, "qty": qty, "active": True}
 #             return rid
 
 #     def confirm(self, reservation_id):
 #         with self._lock:
 #             r = self.reservations.get(reservation_id)
-#             if not r or not r["active"]:            # unknown or already used → invalid
+#             if not r or not r["active"]:            # unknown, or already confirmed/released
 #                 raise InventoryError("bad reservation")
 #             p = self.products[r["sku"]]
-#             p["on_hand"] -= r["qty"]                # the unit physically leaves now
-#             p["reserved"] -= r["qty"]               # ...and is no longer merely held
-#             r["active"] = False
+#             p["on_hand"] -= r["qty"]                # the unit physically leaves the store NOW
+#             p["reserved"] -= r["qty"]               # ...and is no longer merely "held"
+#             r["active"] = False                     # this reservation is done → can't reuse it
 
 #     def release(self, reservation_id):
 #         with self._lock:
 #             r = self.reservations.get(reservation_id)
 #             if not r or not r["active"]:
 #                 raise InventoryError("bad reservation")
-#             self.products[r["sku"]]["reserved"] -= r["qty"]   # give the hold back
+#             # UNDO the hold: on_hand never changed, so we only drop `reserved` back down → the
+#             # units become available again for someone else.
+#             self.products[r["sku"]]["reserved"] -= r["qty"]
 #             r["active"] = False
