@@ -39,6 +39,17 @@ STEP 4 — SOLID + FOLLOW-UPS + CONCURRENCY
 ────────────────────────────────────────────────────────────────────────────
 """
 
+# ─── STEP 5 · HOW IT'S USED (charge → capture → refund, retry-safe) ───────────
+#   gw = PaymentGateway()
+#   p = gw.charge("idem-abc", 500)     # brand-new AUTHORIZED payment → "PAY1"
+#   gw.charge("idem-abc", 500)         # RETRY with the SAME key → returns "PAY1", does NOT charge again
+#   gw.capture(p)                      # AUTHORIZED → CAPTURED (captured_amount = 500)
+#   gw.refund(p, 200)                  # partial → "PARTIALLY_REFUNDED" (refunded 200)
+#   gw.refund(p)                       # amount=None → refund the remaining 300 → "REFUNDED"
+#   gw.refund(p, 1)                    # nothing left → PaymentError (state guard)
+#   # Flow:  client → gateway.charge (idempotency-key lookup first) → every later call is a GUARDED transition.
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ===== SOLUTION (study, then write your own active version) =====
 
 # import itertools

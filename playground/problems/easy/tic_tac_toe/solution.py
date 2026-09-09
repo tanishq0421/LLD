@@ -27,6 +27,19 @@ STEP 4 — SOLID
 ────────────────────────────────────────────────────────────────────────────
 """
 
+# ─── STEP 5 · HOW IT'S USED (object flow / a run-through) ─────────────────────
+#   g = Game()                 # __init__ CREATES the Board (composition) + symbols [X, O]; X to move.
+#                              #   alt design: board = Board(); Game(board)  → board INJECTED = aggregation/DIP
+#   g.current_symbol           # "X"  (whose turn it is)
+#   g.move(0, 0)               # X→(0,0): Game validates → Board.place → _wins? no → flip turn → "IN_PROGRESS"
+#   g.move(1, 0)               # O→(1,0)
+#   g.move(0, 1)               # X→(0,1)
+#   g.move(1, 1)               # O→(1,1)
+#   g.move(0, 2)               # X completes the top row → _wins True → status "WIN", g.winner == "X"
+#   # A driver (or the test harness) just loops: read current_symbol, call move(r,c), read the status.
+#   # Per move the control flows:  caller → Game.move → Board.place/get → Game decides win/draw/next-turn.
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ===== SOLUTION (study, then write your own active version) =====
 
 # from enum import Enum

@@ -42,6 +42,18 @@ STEP 4 — SOLID + CONCURRENCY (the SDE-2 bit)
 ────────────────────────────────────────────────────────────────────────────
 """
 
+# ─── STEP 5 · HOW IT'S USED (a car parks, then leaves) ────────────────────────
+#   clock = FakeClock(0)                       # inject a controllable clock (real code: omit → time.time)
+#   lot = ParkingLot(clock=clock)              # empty lot; clock + rate table injected (DI)
+#   lot.add_spot("S1","SMALL"); lot.add_spot("M1","MEDIUM"); lot.add_spot("L1","LARGE")
+#   t = lot.park("CAR-9", "CAR")               # best-fit: smallest free spot that fits a car → M1 → mark taken
+#                                              #   → record entry = clock() → return ticket "TK1"
+#   lot.available_count("MEDIUM")              # 0  (the car took M1)
+#   clock.t = 3600 * 2                          # 2 hours pass (tests bump the injected clock)
+#   fee = lot.unpark(t)                        # look up ticket → free the spot → ceil(hours)*rate → 40
+#   # Flow:  entry gate → ParkingLot.park (reads spots, writes a ticket) ;  exit → unpark (frees spot, bills).
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ===== SOLUTION (study, then write your own active version) =====
 
 # import time

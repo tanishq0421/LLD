@@ -37,6 +37,16 @@ STEP 4 — SOLID + FOLLOW-UPS
 ────────────────────────────────────────────────────────────────────────────
 """
 
+# ─── STEP 5 · HOW IT'S USED (build a cart, stack rules) ───────────────────────
+#   cart = Cart(); cart.add_item("A", 100, 1); cart.add_item("B", 50, 2)   # subtotal = 200
+#   eng = DiscountEngine()
+#   eng.add_rule(DiscountEngine.threshold(150, 20))   # subtotal ≥ 150 → −20
+#   eng.add_rule(DiscountEngine.percentage(10))       # THEN 10% off the running total
+#   eng.total(cart)      # 200 →(threshold)→ 180 →(10%)→ 162.0     (ORDER matters!)
+#   # swap the two add_rule lines → 200 →(10%)→ 180 →(−20)→ 160.0  (different result)
+#   # Flow:  checkout → Engine.total → cart.subtotal() → fold each rule(cart, running) → floor at 0, round.
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ===== SOLUTION (study, then write your own active version) =====
 
 

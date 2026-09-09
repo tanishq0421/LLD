@@ -36,6 +36,18 @@ STEP 4 — SOLID + SCALE + CONCURRENCY
 ────────────────────────────────────────────────────────────────────────────
 """
 
+# ─── STEP 5 · HOW IT'S USED (book a room, avoid a clash) ──────────────────────
+#   s = MeetingScheduler()
+#   s.add_room("R1"); s.add_room("R2")
+#   b1 = s.book("R1", 10, 11)                  # is_available? yes → append to R1's timeline → "B1"
+#   s.book("R1", 10, 12)                       # overlaps [10,11) → raises Conflict
+#   s.book("R1", 11, 12)                       # 11 == previous end → half-open, no overlap → allowed
+#   s.available_rooms(10, 11)                  # ["R2"]   (R1 is busy in that window)
+#   room, b = s.book_any(10, 11)               # first-fit over rooms → ("R2", "B..")
+#   s.cancel(b1)                               # frees [10,11) on R1 again
+#   # Flow:  caller → Scheduler.book → overlaps() scan over THAT room's list → insert (or raise Conflict).
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ===== SOLUTION (study, then write your own active version) =====
 
 # import itertools

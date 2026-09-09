@@ -39,6 +39,16 @@ STEP 4 — CONCURRENCY (THE follow-up — rehearse this)
 ────────────────────────────────────────────────────────────────────────────
 """
 
+# ─── STEP 5 · HOW IT'S USED (checkout hold → pay or abandon) ──────────────────
+#   inv = Inventory(); inv.add_product("milk", 5)   # on_hand=5, reserved=0 → available 5
+#   r = inv.reserve("milk", 2)                       # available≥2 → reserved=2 → available 3 (on_hand still 5)
+#   inv.confirm(r)                                   # PAID → on_hand 3, reserved 0 → available 3 (unit truly left)
+#   r2 = inv.reserve("milk", 1)                      # hold 1 → available 2
+#   inv.release(r2)                                  # ABANDONED → reserved back → available 3 again
+#   inv.reserve("milk", 99)                          # available < 99 → InventoryError (never oversell)
+#   # Flow:  add-to-cart/checkout → reserve (lock: check+increment) ; payment → confirm ; timeout → release.
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ===== SOLUTION (study, then write your own active version) =====
 
 # import threading

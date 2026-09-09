@@ -42,6 +42,17 @@ STEP 4 — CONCURRENCY (THE interview point — rehearse this out loud)
 ────────────────────────────────────────────────────────────────────────────
 """
 
+# ─── STEP 5 · HOW IT'S USED (pick seats, book atomically) ─────────────────────
+#   svc = BookingService()
+#   svc.add_show("S1", ["A1", "A2", "A3"])     # all AVAILABLE; one Lock created for show S1
+#   svc.available_seats("S1")                  # ["A1", "A2", "A3"]
+#   bk = svc.book("S1", ["A1", "A2"], "u1")    # under S1's lock: both free? yes → mark BOTH → "BK1"
+#   svc.book("S1", ["A2"], "u2")               # A2 already booked → SeatUnavailable (nothing half-booked)
+#   svc.available_seats("S1")                  # ["A3"]
+#   svc.cancel(bk)                             # under the lock → frees A1, A2 again
+#   # Flow:  two users → book() serialised by the PER-SHOW lock → check-ALL-then-mark-ALL → no double-sell.
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ===== SOLUTION (study, then write your own active version) =====
 
 # import threading

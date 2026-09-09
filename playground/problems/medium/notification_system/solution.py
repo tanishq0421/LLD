@@ -38,6 +38,17 @@ STEP 4 — SOLID + FOLLOW-UPS
 ────────────────────────────────────────────────────────────────────────────
 """
 
+# ─── STEP 5 · HOW IT'S USED (wire channels once, then notify) ─────────────────
+#   svc = NotificationService()
+#   svc.register_channel("email", lambda to, msg: ses.send(to, msg))    # each sender = an ADAPTER
+#   svc.register_channel("sms",   lambda to, msg: twilio.text(to, msg)) #   over a real provider's API
+#   svc.subscribe("u1", "email"); svc.subscribe("u1", "sms")            # u1's per-user prefs
+#   svc.notify("u1", "Order shipped")   # walk channels in reg order; for each u1 subscribed to,
+#                                       #   call sender(u1, msg) → returns ["email", "sms"]
+#   svc.notify("u2", "hi")              # u2 has no prefs → [] (no error)
+#   # Flow:  producer/event → Service.notify → each subscribed Channel(adapter) → provider.send(...).
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ===== SOLUTION (study, then write your own active version) =====
 
 
