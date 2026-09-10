@@ -126,3 +126,106 @@ STEP 4 — SOLID + CONCURRENCY (the SDE-2 bit)
 #         # math.ceil(90s/3600) = ceil(0.025) = 1;  ceil((2h+1s)/3600) = ceil(2.0002) = 3.
 #         hours = max(1, math.ceil((self.clock() - entry) / 3600))
 #         return hours * self.rates[vtype]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 6 · SDE-1 → SDE-2 UPGRADES — the follow-ups written AS CODE
+#          Same problem. The level difference is in the depth of these answers, not the base.
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# ───────────────────────────────────────────────────────────────────────────────
+# (A) CONCURRENCY / THREAD-SAFETY   ← the #1 follow-up, the biggest SDE-1→SDE-2 jump
+# ───────────────────────────────────────────────────────────────────────────────
+# THE BUG (why the base park() is unsafe): two cars call park() at the same instant. Both run the
+# "find a free spot" READ, both see spot L1 free, both then MARK it taken → one spot, two cars.
+# It's a textbook check-then-act race on shared state (self.spots).
+#   Measured (200 cars racing for 50 spots):  no lock → ~190 "succeed" (huge oversell);
+#                                             locked  → exactly 50.  The lock IS the difference.
+#
+# THE FIX — make find-and-mark ONE atomic step. The whole diff vs the base class:
+#
+#   import threading
+#   class ParkingLot:
+#       def __init__(self, clock=None, hourly_rates=None):
+#           ...
+#           self._lock = threading.Lock()                 # <── ADDED
+#
+#       def park(self, vehicle_id, vehicle_type):
+#           need = REQUIRED[vehicle_type]
+#           with self._lock:                              # <── ADDED: wrap ONLY the critical section
+#               candidates = sorted(                      #     (the READ …)
+#                   (SIZE[t], sid) for sid, (t, occ) in self.spots.items()
+#                   if not occ and SIZE[t] >= need)
+#               if not candidates:
+#                   raise ParkingFull("no compatible spot free")
+#               spot_id = candidates[0][1]
+#               self.spots[spot_id][1] = True             #     … and the WRITE — now inseparable)
+#               ticket_id = f"TK{next(self._seq)}"
+#               self.tickets[ticket_id] = [spot_id, vehicle_type, self.clock(), True]
+#               return ticket_id
+#
+#       def unpark(self, ticket_id):                      # unpark() also mutates self.spots →
+#           with self._lock:                              # guard it too, else a free() can race a park()
+#               ...  # (same body as the base unpark)
+#
+# WHAT TO SAY OUT LOUD (this narration is the real SDE-2 signal, more than the code):
+#   • "Only find-a-spot + mark-it must be atomic, so I lock exactly those lines — not the whole
+#      method. Building the ticket id / timestamp doesn't touch shared state, it can stay outside."
+#   • GLOBAL vs FINE-GRAINED (the senior nuance the interviewer is fishing for):
+#       – ONE lock on the whole lot (above) is CORRECT but serialises EVERY gate → throughput is
+#         capped at one core; two cars at opposite ends of the lot still wait on each other.
+#       – FINER: a lock PER SPOT (or per floor / per spot-type bucket) → unrelated cars never block.
+#       – OPTIMISTIC: compare-and-set on each spot's occupied flag, retry on conflict → no blocking
+#         on the happy path (great when contention is rare).
+#       – AT DB SCALE: `SELECT … FOR UPDATE` on the spot row, or a UNIQUE constraint on the
+#         assignment so the DB itself rejects the second claim.
+#   • The trade-off to name: coarse lock = simple + correct + low throughput; fine-grained = more
+#     complex + scales. Pick coarse first, then say how you'd shard it. (Don't build all of it.)
+#
+# ───────────────────────────────────────────────────────────────────────────────
+# (B) PRICING as a STRATEGY   ← "now support a flat fee / day-pass / free-first-15-min"
+# ───────────────────────────────────────────────────────────────────────────────
+# SDE-1: the fee formula lives INSIDE unpark(). Every new tariff = edit unpark() (you can break
+#        existing pricing while adding a new one).
+# SDE-2: make pricing a swappable Strategy, injected in → a new tariff is a NEW class, unpark()
+#        never changes (Open/Closed Principle).
+#
+#   class HourlyPricing:
+#       def fee(self, vehicle_type, seconds):
+#           return max(1, math.ceil(seconds / 3600)) * DEFAULT_RATES[vehicle_type]
+#
+#   class FlatPricing:
+#       def __init__(self, amount): self.amount = amount
+#       def fee(self, vehicle_type, seconds): return self.amount
+#
+#   class FreeFirst15Pricing:                      # free for ≤15 min, hourly after
+#       def fee(self, vehicle_type, seconds):
+#           if seconds <= 15 * 60: return 0
+#           return max(1, math.ceil(seconds / 3600)) * DEFAULT_RATES[vehicle_type]
+#
+#   # inject it, then DELEGATE instead of computing inline:
+#   def __init__(self, ..., pricing=None):
+#       self.pricing = pricing or HourlyPricing()          # DI; default keeps base behaviour
+#   def unpark(self, ticket_id):
+#       ...
+#       return self.pricing.fee(vtype, self.clock() - entry)   # unpark() no longer KNOWS the formula
+#
+# Same move for ALLOCATION: BestFit (base) vs NearestToGate vs FloorBalancing → an AllocationStrategy
+# with pick(spots, need) -> spot_id, injected the same way. Base picks a default; interviewer swaps it.
+#
+# ───────────────────────────────────────────────────────────────────────────────
+# (C) OTHER FOLLOW-UPS (sketch — MENTION, don't over-build; over-building is a red flag):
+# ───────────────────────────────────────────────────────────────────────────────
+#   • MULTI-FLOOR:   give Spot a `floor`; the lot holds floors; allocation scans floors in policy
+#                    order. park()'s SHAPE doesn't change — only the candidate set it searches.
+#   • DISPLAY BOARD ("3 left"): Observer — the lot notifies subscribed displays on park/unpark.
+#   • EV / HANDICAPPED spots: new spot TYPES (data), not new classes — exactly why `type` is a
+#     string/enum, not a subclass. New type = one dict entry, zero edits to park().
+#
+# ───────────────────────────────────────────────────────────────────────────────
+# SDE-1  vs  SDE-2  AT A GLANCE  (same problem — what raises the bar):
+#   Correctness     happy-path park/unpark works       + the last-spot RACE handled with a lock
+#   Extensibility   one pricing rule, edit to change   pricing & allocation are injected Strategies (OCP)
+#   Concurrency     "I'd put a lock"                   global-vs-fine-grained + the throughput trade-off
+#   Communication   explains what the code does        narrates trade-offs & when NOT to add machinery
+# ═══════════════════════════════════════════════════════════════════════════════
